@@ -13,7 +13,6 @@ MapStruct, springdoc (OpenAPI), Micrometer/Actuator, JUnit 5 + AssertJ + Testcon
 
 ```bash
 
-# либо локально: БД в Docker, сервис через Maven
 docker compose up -d db
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
@@ -33,6 +32,9 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
 Остальное (таймауты, число попыток, лимит по умолчанию, часовой пояс) — `app.*` в `application.yml`.
 
+Ключи и учётные данные в репозитории не хранятся: в коде и в CI-конфигурации они задаются только через
+переменные окружения (локально) и секреты репозитория (GitHub Actions).
+
 ## API
 
 Два API без разграничения доступа (по условию прототипа). Ошибки везде в формате `ProblemDetail` (RFC 9457).
@@ -44,7 +46,7 @@ JSON — snake_case, как в задании.
 
 ```json
 {"account_from":"0000000123","account_to":"9999999999","currency_shortname":"KZT",
- "sum":10000.45,"expense_category":"product","datetime":"2022-01-30T00:00:00+06:00"}
+  "sum":10000.45,"expense_category":"product","datetime":"2022-01-30T00:00:00+06:00"}
 ```
 Ответ содержит сохранённую транзакцию, `limit_exceeded` и `status` (`PROCESSED` | `PENDING_RATE`).
 
@@ -125,11 +127,20 @@ web  ──►  service  ──►  repository ──► PostgreSQL
 | `LimitFlagsIntegrationTest` (Testcontainers) | случаи 1 и 2 из задания, смена месяца, остаток 0, независимость категорий, **параллельные запросы**, `PENDING_RATE` |
 | `Case1EndToEndTest` | «случай 1» целиком через HTTP (реальный порт + PostgreSQL + WireMock), ровно транзакции 3 и 13 января с данными лимита |
 
+## CI
+
+GitHub Actions (push в `main` и pull request): на раннере поднимается PostgreSQL 16 как service container, затем
+выполняется `mvn -B verify` (unit, интеграционные и end-to-end тесты), отчёты тестов сохраняются как артефакт.
+
+Учётные данные БД в workflow не хранятся. Нужно завести секреты репозитория
+(Settings → Secrets and variables → Actions): `DB_URL`, `DB_USER`, `DB_PASSWORD`. Workflow подставляет их
+в переменные окружения шага сборки и в контейнер PostgreSQL через `${{ secrets.* }}`.
+
 ## AI в проекте
 
-> Этот раздел нужно заполнить своими словами — на защите по нему будут задавать вопросы. Ниже каркас.
-
-- **Инструмент и для чего:** Claude (чат) — первичный каркас проекта и тестов, объяснение архитектуры. <допишите, что делали сами>
+- **Инструмент и для чего:** Claude (чат) — первичный каркас проекта и тестов, объяснение архитектуры, разбор
+  ошибок компиляции, черновик CI-workflow для GitHub Actions. Сгенерированный код не принимался как есть: он
+  собирался и запускался в IDE, найденные ошибки разбирались и исправлялись (см. ниже).
 - **MCP:** `context7` (актуальная документация Spring/Hibernate/Testcontainers) и `postgres` (read-only доступ
   агента к схеме и данным локальной БД; роль `mcp_readonly` создаётся `docker/postgres/init-readonly.sql`).
   Конфигурация: `.mcp.json` (Claude Code), `.vscode/mcp.json` (Copilot). Строка подключения — только через
@@ -139,4 +150,17 @@ web  ──►  service  ──►  repository ──► PostgreSQL
   `create-db-migration`. Агент подхватывает их по `description`; например: «добавь провайдера курсов alphavantage».
   Проверка, что агент находит скилл: <допишите результат>
 - **Что написано вручную:** <перечислите>
-- **Где AI ошибся и как это обнаружено:** <допишите реальные случаи после сборки и прогона тестов>
+- **Где AI ошибся и как это обнаружено:**
+  1. `GlobalExceptionHandler`: в сгенерированном коде вызывался `PropertyNamingStrategies.SNAKE_CASE.translate(...)`.
+     IDE подсветила ошибку `Cannot resolve method 'translate' in 'PropertyNamingStrategy'`. Причина: константа
+     `SNAKE_CASE` объявлена с базовым типом `PropertyNamingStrategy`, у которого нет метода `translate`; он есть у
+     `PropertyNamingStrategies.NamingBase`. Исправил: завёл константу типа `NamingBase` с экземпляром
+     `SnakeCaseStrategy` и использую её.
+  2. `TwelveDataClient`: при запуске IDE показывала `Class doesn't contain matching constructor for autowiring`.
+     Причина: у класса два публичных конструктора, и Spring не может выбрать, каким создавать бин (второй принимает
+     `AppProperties.TwelveData`, который не является бином). Исправил: поставил `@Autowired` на конструктор с
+     `AppProperties`, второй оставил для тестов.
+  3. CI-workflow: в сгенерированном черновике URL, пользователь и пароль БД были прописаны прямо в yaml (хардкод
+     секретных данных в репозитории). Заметил это и исправил: вынес значения в секреты репозитория
+     (`DB_URL`, `DB_USER`, `DB_PASSWORD`), в workflow они подставляются через `${{ secrets.* }}`, а само
+     приложение читает те же значения из переменных окружения.
