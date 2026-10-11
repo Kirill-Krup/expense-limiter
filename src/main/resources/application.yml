@@ -5,9 +5,9 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/expense_limiter}
+    username: ${DB_USER:expense}
+    password: ${DB_PASSWORD:expense}
   jpa:
     open-in-view: false
     hibernate:

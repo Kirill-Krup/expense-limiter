@@ -3,8 +3,8 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: expense_limiter
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER:-expense}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-expense}
     ports:
       - "5432:5432"
     volumes:
