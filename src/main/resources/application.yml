@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: expense-limiter
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    deserialization:
+      fail-on-unknown-properties: true
+      adjust-dates-to-context-time-zone: false
+    serialization:
+      write-dates-as-timestamps: false
+      write-bigdecimal-as-plain: true
+
+app:
+  rate-provider: twelvedata
+  business-zone: Asia/Almaty
+  default-limit-usd: 1000.00
+  twelvedata:
+    base-url: https://api.twelvedata.com
+    api-key: ${TWELVEDATA_API_KEY:demo}
+    connect-timeout: PT2S
+    read-timeout: PT3S
+    max-attempts: 3
+    retry-backoff: PT0.3S
+  pending:
+    retry-interval: PT1M
+    batch-size: 100
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

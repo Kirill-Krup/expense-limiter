@@ -1,0 +1,4 @@
+logging:
+  level:
+    com.bank.expenselimiter: DEBUG
+    org.hibernate.SQL: DEBUG
