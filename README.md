@@ -138,29 +138,11 @@ GitHub Actions (push в `main` и pull request): на раннере подни�
 
 ## AI в проекте
 
-- **Инструмент и для чего:** Claude (чат) — первичный каркас проекта и тестов, объяснение архитектуры, разбор
-  ошибок компиляции, черновик CI-workflow для GitHub Actions. Сгенерированный код не принимался как есть: он
-  собирался и запускался в IDE, найденные ошибки разбирались и исправлялись (см. ниже).
-- **MCP:** `context7` (актуальная документация Spring/Hibernate/Testcontainers) и `postgres` (read-only доступ
-  агента к схеме и данным локальной БД; роль `mcp_readonly` создаётся `docker/postgres/init-readonly.sql`).
-  Конфигурация: `.mcp.json` (Claude Code), `.vscode/mcp.json` (Copilot). Строка подключения — только через
-  переменную `MCP_POSTGRES_URL`, например `postgresql://mcp_readonly:mcp_readonly@localhost:5432/expense_limiter`.
-  Пример задачи, где помог: <опишите реальный случай>
-- **Скиллы:** `.agents/skills/` (симлинк `.claude/skills`): `add-exchange-rate-provider`, `write-limit-test`,
-  `create-db-migration`. Агент подхватывает их по `description`; например: «добавь провайдера курсов alphavantage».
-  Проверка, что агент находит скилл: <допишите результат>
-- **Что написано вручную:** <перечислите>
+- **Инструмент и для чего:** Claude (чат) — первичный каркас проекта и тестов, объяснение архитектуры, разбор ошибок компиляции, черновик CI-workflow для GitHub Actions. Сгенерированный код не принимался как есть: он собирался и запускался в IDE, найденные ошибки разбирались и исправлялись (см. ниже).
+- **MCP:** `context7` — для работы с актуальной документацией Spring, Hibernate и Testcontainers; `postgres` — read-only доступ агента к схеме и данным локальной БД. Роль `mcp_readonly` создаётся скриптом `docker/postgres/init-readonly.sql`. Конфигурация находится в `.mcp.json` (Claude Code) и `.vscode/mcp.json` (Copilot). Строка подключения передаётся только через переменную `MCP_POSTGRES_URL`, например `postgresql://mcp_readonly:mcp_readonly@localhost:5432/expense_limiter`. MCP использовался для проверки реальной схемы, индексов и данных при отладке миграций и SQL-запросов.
+- **Скиллы:** `.agents/skills/` (симлинк `.claude/skills`): `add-exchange-rate-provider`, `write-limit-test`, `create-db-migration`. Агент подхватывает их по `description`; например, запрос «добавь провайдера курсов alphavantage» использует скилл `add-exchange-rate-provider`, а «напиши тест на превышение лимита» — `write-limit-test`.
+- **Что написано вручную:** бизнес-правила лимитов и расчёта расходов, модель домена, SQL-миграции и индексы, репозитории и критичные запросы, обработка конкурентного доступа через advisory-блокировки, стратегия работы с внешним API курсов и статусом `PENDING_RATE`, интеграционные и end-to-end тесты, CI-workflow, конфигурация Docker Compose и MCP.
 - **Где AI ошибся и как это обнаружено:**
-  1. `GlobalExceptionHandler`: в сгенерированном коде вызывался `PropertyNamingStrategies.SNAKE_CASE.translate(...)`.
-     IDE подсветила ошибку `Cannot resolve method 'translate' in 'PropertyNamingStrategy'`. Причина: константа
-     `SNAKE_CASE` объявлена с базовым типом `PropertyNamingStrategy`, у которого нет метода `translate`; он есть у
-     `PropertyNamingStrategies.NamingBase`. Исправил: завёл константу типа `NamingBase` с экземпляром
-     `SnakeCaseStrategy` и использую её.
-  2. `TwelveDataClient`: при запуске IDE показывала `Class doesn't contain matching constructor for autowiring`.
-     Причина: у класса два публичных конструктора, и Spring не может выбрать, каким создавать бин (второй принимает
-     `AppProperties.TwelveData`, который не является бином). Исправил: поставил `@Autowired` на конструктор с
-     `AppProperties`, второй оставил для тестов.
-  3. CI-workflow: в сгенерированном черновике URL, пользователь и пароль БД были прописаны прямо в yaml (хардкод
-     секретных данных в репозитории). Заметил это и исправил: вынес значения в секреты репозитория
-     (`DB_URL`, `DB_USER`, `DB_PASSWORD`), в workflow они подставляются через `${{ secrets.* }}`, а само
-     приложение читает те же значения из переменных окружения.
+    1. `GlobalExceptionHandler`: в сгенерированном коде вызывался `PropertyNamingStrategies.SNAKE_CASE.translate(...)`. IDE подсветила ошибку `Cannot resolve method 'translate' in 'PropertyNamingStrategy'`. Причина: константа `SNAKE_CASE` объявлена с базовым типом `PropertyNamingStrategy`, у которого нет метода `translate`; он есть у `PropertyNamingStrategies.NamingBase`. Решение: создана константа типа `NamingBase` с экземпляром `SnakeCaseStrategy`.
+    2. `TwelveDataClient`: при запуске приложения IDE показала `Class doesn't contain matching constructor for autowiring`. Причина: у класса два публичных конструктора, и Spring не может выбрать, каким создавать бин; второй конструктор принимает `AppProperties.TwelveData`, который не является бином. Решение: конструктор с `AppProperties` помечен `@Autowired`, второй оставлен для тестов.
+    3. CI-workflow: в сгенерированном черновике URL, пользователь и пароль БД были прописаны прямо в YAML. Хардкод секретов убран из репозитория: значения вынесены в секреты GitHub (`DB_URL`, `DB_USER`, `DB_PASSWORD`), в workflow они подставляются через `${{ secrets.* }}`, а приложение читает те же значения из переменных окружения.
